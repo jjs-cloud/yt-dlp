@@ -1633,7 +1633,7 @@ class TikTokLiveIE(TikTokBaseIE):
 
         formats = []
         live_info = self._call_api(
-            'https://webcast.tiktok.com/webcast/room/info', 'room_id', room_id, uploader, key='data')
+            'https://webcast.us.tiktok.com/webcast/room/info', 'room_id', room_id, uploader, key='data')
 
         get_quality = qualities(('SD1', 'ld', 'SD2', 'sd', 'HD1', 'hd', 'FULL_HD1', 'uhd', 'ORIGION', 'origin'))
         parse_inner = lambda x: self._parse_json(x, None)
@@ -1697,7 +1697,7 @@ class TikTokLiveIE(TikTokBaseIE):
             })
 
         # If uploader is a guest on another's livestream, primary endpoint will not have m3u8 URLs
-        if not traverse_obj(formats, lambda _, v: v['ext'] == 'mp4'):
+        if not formats:
             live_info = merge_dicts(live_info, self._call_api(
                 'https://www.tiktok.com/api/live/detail/', 'roomID', room_id, uploader, key='LiveRoomInfo'))
             if url_or_none(live_info.get('liveUrl')):
