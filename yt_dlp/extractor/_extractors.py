@@ -8,4 +8,3 @@ from .twitch import (
     TwitchVideosIE,
     TwitchVodIE,
 )
-from .generic import GenericIE

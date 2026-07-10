@@ -1,8 +1,6 @@
 # flake8: noqa: F401
 
 from .common import PostProcessor
-from .embedthumbnail import EmbedThumbnailPP
-from .exec import ExecAfterDownloadPP, ExecPP
 from .ffmpeg import (
     FFmpegConcatPP,
     FFmpegCopyStreamPP,
@@ -23,15 +21,7 @@ from .ffmpeg import (
     FFmpegVideoConvertorPP,
     FFmpegVideoRemuxerPP,
 )
-from .metadataparser import (
-    MetadataFromFieldPP,
-    MetadataFromTitlePP,
-    MetadataParserPP,
-)
-from .modify_chapters import ModifyChaptersPP
 from .movefilesafterdownload import MoveFilesAfterDownloadPP
-from .sponsorblock import SponsorBlockPP
-from .xattrpp import XAttrMetadataPP
 from ..globals import plugin_pps, postprocessors
 from ..plugins import PACKAGE_NAME, register_plugin_spec, PluginSpec
 from ..utils import deprecation_warning

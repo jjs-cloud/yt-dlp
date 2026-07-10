@@ -22,13 +22,8 @@ if not _CLASS_LOOKUP:
         for name in dir(_extractors)
         if name.endswith('IE')
     )
-    _CLASS_LOOKUP = dict(itertools.chain(
-        # Add Youtube first to improve matching performance
-        ((name, value) for name, value in members if '.youtube' in value.__module__),
-        # Add Generic last so that it is the fallback
-        ((name, value) for name, value in members if name != 'GenericIE'),
-        (('GenericIE', _extractors.GenericIE),),
-    ))
+    _CLASS_LOOKUP = dict(members)
+
 
 # We want to append to the main lookup
 _current = _extractors_context.value

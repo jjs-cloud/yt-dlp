@@ -58,7 +58,6 @@ from .networking.exceptions import (
 from .networking.impersonate import ImpersonateRequestHandler, ImpersonateTarget
 from .plugins import directories as plugin_directories, load_all_plugins
 from .postprocessor import (
-    EmbedThumbnailPP,
     FFmpegFixupDuplicateMoovPP,
     FFmpegFixupDurationPP,
     FFmpegFixupM3u8PP,
@@ -3451,7 +3450,7 @@ class YoutubeDL:
                                 and info_dict.get('thumbnails')
                                 # check with type instead of pp_key, __name__, or isinstance
                                 # since we dont want any custom PPs to trigger this
-                                and any(type(pp) == EmbedThumbnailPP for pp in self._pps['post_process'])):  # noqa: E721
+                                and any(pp.__class__.__name__ == 'EmbedThumbnailPP' for pp in self._pps['post_process'])):  # noqa: E721
                             info_dict['ext'] = 'mkv'
                             self.report_warning(
                                 'webm doesn\'t support embedding a thumbnail, mkv will be used')
