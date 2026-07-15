@@ -1612,21 +1612,21 @@ class TikTokLiveIE(TikTokBaseIE):
     def _real_extract(self, url):
         uploader, room_id = self._match_valid_url(url).group('uploader', 'id')
         if not room_id:
-            webpage = self._download_webpage(
-                format_field(uploader, None, self._UPLOADER_URL_FORMAT), uploader, impersonate=True)
-            room_id = traverse_obj(
-                self._get_universal_data(webpage, uploader),
-                ('webapp.user-detail', 'userInfo', 'user', 'roomId', {str}))
-
-        if not uploader or not room_id:
-            webpage = self._download_webpage(url, uploader or room_id, fatal=not room_id)
-            data = self._get_sigi_state(webpage, uploader or room_id)
-            room_id = room_id or traverse_obj(data, ((
+            webpage = self._download_webpage(url, uploader, fatal=False) or ''
+            data = self._get_sigi_state(webpage, uploader)
+            room_id = traverse_obj(data, ((
                 ('LiveRoom', 'liveRoomUserInfo', 'user'),
                 ('UserModule', 'users', ...)), 'roomId', {str}, any))
             uploader = uploader or traverse_obj(data, ((
                 ('LiveRoom', 'liveRoomUserInfo', 'user'),
                 ('UserModule', 'users', ...)), 'uniqueId', {str}, any))
+
+        if not uploader or not room_id:
+            webpage = self._download_webpage(
+                format_field(uploader, None, self._UPLOADER_URL_FORMAT), uploader, fatal=not room_id, impersonate=True)
+            room_id = room_id or traverse_obj(
+                self._get_universal_data(webpage, uploader),
+                ('webapp.user-detail', 'userInfo', 'user', 'roomId', {str}))
 
         if not room_id:
             raise UserNotLive(video_id=uploader)
