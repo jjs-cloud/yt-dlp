@@ -1612,7 +1612,7 @@ class TikTokLiveIE(TikTokBaseIE):
     def _real_extract(self, url):
         uploader, room_id = self._match_valid_url(url).group('uploader', 'id')
         if not room_id:
-            webpage = self._download_webpage(url, uploader, fatal=False) or ''
+            webpage = self._download_webpage(url, uploader, fatal=False, impersonate=True) or ''
             data = self._get_sigi_state(webpage, uploader)
             room_id = traverse_obj(data, ((
                 ('LiveRoom', 'liveRoomUserInfo', 'user'),
