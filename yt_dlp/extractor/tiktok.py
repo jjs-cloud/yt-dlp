@@ -1676,14 +1676,19 @@ class TikTokLiveIE(TikTokBaseIE):
         for stream in ('hls', 'rtmp'):
             stream_url = traverse_obj(live_info, ('stream_url', f'{stream}_pull_url', {url_or_none}))
             if stream_url:
-                formats.append({
+                fmt = {
                     'url': stream_url,
                     'ext': 'mp4' if stream == 'hls' else 'flv',
                     'protocol': 'm3u8_native' if stream == 'hls' else 'https',
                     'format_id': f'{stream}-pull',
                     'vcodec': get_vcodec(f'{stream}_pull_url_params'),
-                    'quality': -1,
-                })
+                    'quality': get_quality('ORIGION'),
+                }
+                if stream == 'hls':
+                    fmt['downloader_options'] = {
+                        'ffmpeg_args': ['-live_start_index', '-1'],
+                    }
+                formats.append(fmt)
 
         for f_id, f_url in traverse_obj(live_info, ('stream_url', 'flv_pull_url', {dict}), default={}).items():
             if not url_or_none(f_url):
@@ -1718,7 +1723,7 @@ class TikTokLiveIE(TikTokBaseIE):
             'uploader_url': format_field(uploader, None, self._UPLOADER_URL_FORMAT) or None,
             'is_live': True,
             'formats': formats,
-            '_format_sort_fields': ('quality', '+ext'),
+            '_format_sort_fields': ('quality', 'ext'),
             **traverse_obj(live_info, {
                 'title': 'title',
                 'uploader_id': (('ownerInfo', 'owner'), 'id', {str_or_none}),
