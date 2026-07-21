@@ -1682,7 +1682,7 @@ class TikTokLiveIE(TikTokBaseIE):
                     'protocol': 'm3u8_native' if stream == 'hls' else 'https',
                     'format_id': f'{stream}-pull',
                     'vcodec': get_vcodec(f'{stream}_pull_url_params'),
-                    'quality': get_quality('ORIGION'),
+                    'quality': -1,
                 }
                 if stream == 'hls':
                     fmt['downloader_options'] = {
@@ -1723,7 +1723,7 @@ class TikTokLiveIE(TikTokBaseIE):
             'uploader_url': format_field(uploader, None, self._UPLOADER_URL_FORMAT) or None,
             'is_live': True,
             'formats': formats,
-            '_format_sort_fields': ('quality', 'ext'),
+            '_format_sort_fields': ('quality', '+ext'),
             **traverse_obj(live_info, {
                 'title': 'title',
                 'uploader_id': (('ownerInfo', 'owner'), 'id', {str_or_none}),
