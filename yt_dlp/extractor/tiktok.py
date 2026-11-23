@@ -1614,15 +1614,19 @@ class TikTokLiveIE(TikTokBaseIE):
         'only_matching': True,
     }]
 
-    def _call_api(self, url, param, room_id, uploader, key=None):
+    def _call_api(self, url, param, value, uploader, key=None):
         response = traverse_obj(self._download_json(
-            url, room_id, fatal=False, query={
+            url, value, fatal=False, headers={
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
+                'Referer': 'https://www.tiktok.com/',
+            }, query={
                 'aid': '1988',
-                param: room_id,
+                'sourceType': '54',
+                param: value,
             }), (key, {dict}), default={})
 
         # status == 2 if live else 4
-        if int_or_none(response.get('status')) == 2:
+        if traverse_obj(response, ('liveRoom', 'status'), ('user', 'status'), 'status') == 2:
             return response
         # If room_id is obtained via mobile share URL and cannot be refreshed, do not wait for live
         elif not uploader:
@@ -1631,99 +1635,53 @@ class TikTokLiveIE(TikTokBaseIE):
 
     def _real_extract(self, url):
         uploader, room_id = self._match_valid_url(url).group('uploader', 'id')
-        if not room_id:
-            webpage = self._download_webpage(
-                format_field(uploader, None, self._UPLOADER_URL_FORMAT), uploader,
-                impersonate=True, headers=self._generate_blockbuster_headers())
-            room_id = traverse_obj(
-                self._get_universal_data(webpage, uploader),
-                ('webapp.user-detail', 'userInfo', 'user', 'roomId', {str}))
-
-        if not uploader or not room_id:
-            webpage = self._download_webpage(url, uploader or room_id, fatal=not room_id)
-            data = self._get_sigi_state(webpage, uploader or room_id)
-            room_id = room_id or traverse_obj(data, ((
-                ('LiveRoom', 'liveRoomUserInfo', 'user'),
-                ('UserModule', 'users', ...)), 'roomId', {str}, any))
-            uploader = uploader or traverse_obj(data, ((
+        if not uploader:
+            webpage = self._download_webpage(url, room_id)
+            data = self._get_sigi_state(webpage, room_id)
+            uploader = traverse_obj(data, ((
                 ('LiveRoom', 'liveRoomUserInfo', 'user'),
                 ('UserModule', 'users', ...)), 'uniqueId', {str}, any))
 
-        if not room_id:
-            raise UserNotLive(video_id=uploader)
+        if not uploader and not room_id:
+            raise UserNotLive(video_id=uploader or room_id)
 
         formats = []
         live_info = self._call_api(
-            'https://webcast.us.tiktok.com/webcast/room/info', 'room_id', room_id, uploader, key='data')
+            'https://www.tiktok.com/api-live/user/room', 'uniqueId', uploader, uploader, key='data')
+        room_id = room_id or traverse_obj(live_info, ('user', 'roomId', {str}))
 
-        get_quality = qualities(('SD1', 'ld', 'SD2', 'sd', 'HD1', 'hd', 'FULL_HD1', 'uhd', 'ORIGION', 'origin'))
+        get_quality = qualities(('ao', 'SD1', 'ld', 'SD2', 'sd', 'HD1', 'hd', 'FULL_HD1', 'uhd', 'ORIGION', 'origin'))
         parse_inner = lambda x: self._parse_json(x, None)
 
-        for quality, stream in traverse_obj(live_info, (
-                'stream_url', 'live_core_sdk_data', 'pull_data', 'stream_data',
-                {parse_inner}, 'data', {dict}), default={}).items():
+        for stream_dict in traverse_obj(live_info, (
+                'liveRoom', ('streamData', 'hevcStreamData'), 'pull_data', 'stream_data',
+                {parse_inner}, 'data', {dict})):
+            for quality, stream in stream_dict.items():
+                sdk_params = traverse_obj(stream, ('main', 'sdk_params', {parse_inner}, {
+                    'vcodec': ('VCodec', {str}),
+                    'tbr': ('vbitrate', {int_or_none(scale=1000)}),
+                    'resolution': ('resolution', {lambda x: re.match(r'(?i)\d+x\d+|\d+p', x).group().lower()}),
+                }))
 
-            sdk_params = traverse_obj(stream, ('main', 'sdk_params', {parse_inner}, {
-                'vcodec': ('VCodec', {str}),
-                'tbr': ('vbitrate', {int_or_none(scale=1000)}),
-                'resolution': ('resolution', {lambda x: re.match(r'(?i)\d+x\d+|\d+p', x).group().lower()}),
-            }))
-
-            flv_url = traverse_obj(stream, ('main', 'flv', {url_or_none}))
-            if flv_url:
-                formats.append({
-                    'url': flv_url,
-                    'ext': 'flv',
-                    'format_id': f'flv-{quality}',
-                    'quality': get_quality(quality),
-                    **sdk_params,
-                })
-
-            hls_url = traverse_obj(stream, ('main', 'hls', {url_or_none}))
-            if hls_url:
-                formats.append({
-                    'url': hls_url,
-                    'ext': 'mp4',
-                    'protocol': 'm3u8_native',
-                    'format_id': f'hls-{quality}',
-                    'quality': get_quality(quality),
-                    **sdk_params,
-                })
-
-        def get_vcodec(*keys):
-            return traverse_obj(live_info, (
-                'stream_url', *keys, {parse_inner}, 'VCodec', {str}))
-
-        for stream in ('hls', 'rtmp'):
-            stream_url = traverse_obj(live_info, ('stream_url', f'{stream}_pull_url', {url_or_none}))
-            if stream_url:
-                fmt = {
-                    'url': stream_url,
-                    'ext': 'mp4' if stream == 'hls' else 'flv',
-                    'protocol': 'm3u8_native' if stream == 'hls' else 'https',
-                    'format_id': f'{stream}-pull',
-                    'vcodec': get_vcodec(f'{stream}_pull_url_params'),
-                    'quality': -1,
-                }
-                if stream == 'hls':
-                    fmt['downloader_options'] = {
-                        'ffmpeg_args': ['-live_start_index', '-1'],
-                    }
-                formats.append(fmt)
-
-        for f_id, f_url in traverse_obj(live_info, ('stream_url', 'flv_pull_url', {dict}), default={}).items():
-            if not url_or_none(f_url):
-                continue
-            formats.append({
-                'url': f_url,
-                'ext': 'flv',
-                'format_id': f'flv-{f_id}'.lower(),
-                'vcodec': get_vcodec('flv_pull_url_params', f_id),
-                'quality': get_quality(f_id),
-            })
+                for proto, ext, protocol in (
+                    ('flv', 'flv', 'https'),
+                    ('hls', 'mp4', 'm3u8_native'),
+                    ('cmaf', 'mp4', 'm3u8_native'),
+                ):
+                    stream_url = traverse_obj(stream, ('main', proto, {url_or_none}))
+                    if stream_url:
+                        formats.append({
+                            'url': stream_url,
+                            'ext': ext,
+                            'protocol': protocol,
+                            'format_id': f'{proto}-{quality}',
+                            'quality': get_quality(quality),
+                            'preference': 0 if ext == 'flv' else -1,
+                            **sdk_params,
+                        })
 
         # If uploader is a guest on another's livestream, primary endpoint will not have m3u8 URLs
-        if not formats:
+        if not formats and room_id:
             live_info = merge_dicts(live_info, self._call_api(
                 'https://www.tiktok.com/api/live/detail/', 'roomID', room_id, uploader, key='LiveRoomInfo'))
             if url_or_none(live_info.get('liveUrl')):
@@ -1736,7 +1694,9 @@ class TikTokLiveIE(TikTokBaseIE):
                     'quality': get_quality('origin'),
                 })
 
-        uploader = uploader or traverse_obj(live_info, ('ownerInfo', 'uniqueId'), ('owner', 'display_id'))
+        self._remove_duplicate_formats(formats)
+
+        uploader = uploader or traverse_obj(live_info, ('user', 'uniqueId'), ('ownerInfo', 'uniqueId'), ('owner', 'display_id'))
 
         return {
             'id': room_id,
@@ -1746,9 +1706,9 @@ class TikTokLiveIE(TikTokBaseIE):
             'formats': formats,
             '_format_sort_fields': ('quality', '+ext'),
             **traverse_obj(live_info, {
-                'title': 'title',
-                'uploader_id': (('ownerInfo', 'owner'), 'id', {str_or_none}),
-                'creator': (('ownerInfo', 'owner'), 'nickname'),
-                'concurrent_view_count': (('user_count', ('liveRoomStats', 'userCount')), {int_or_none}),
+                'title': (('liveRoom', None), 'title'),
+                'uploader_id': (('user', 'ownerInfo', 'owner'), 'id', {str_or_none}),
+                'creator': (('user', 'ownerInfo', 'owner'), 'nickname'),
+                'concurrent_view_count': (('user_count', (('liveRoom', None), 'liveRoomStats', 'userCount')), {int_or_none}),
             }, get_all=False),
         }
