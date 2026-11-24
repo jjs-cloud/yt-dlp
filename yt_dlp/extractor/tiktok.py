@@ -1640,7 +1640,7 @@ class TikTokLiveIE(TikTokBaseIE):
                     'ext': 'flv',
                     'format_id': f'flv-{quality}',
                     'quality': get_quality(quality),
-                    'preference': -1,  # Stops core demoting HEVC-in-FLV below h264
+                    'preference': 0,  # Prefers FLV over HLS and stops core demoting HEVC-in-FLV
                     **sdk_params,
                 })
 
@@ -1652,6 +1652,7 @@ class TikTokLiveIE(TikTokBaseIE):
                     'protocol': 'm3u8_native',
                     'format_id': f'hls-{quality}',
                     'quality': get_quality(quality),
+                    'preference': -1,
                     **sdk_params,
                 })
 
@@ -1669,7 +1670,7 @@ class TikTokLiveIE(TikTokBaseIE):
                     'format_id': f'{stream}-pull',
                     'vcodec': get_vcodec(f'{stream}_pull_url_params'),
                     'quality': get_quality('ORIGION'),
-                    'preference': -1,
+                    'preference': 0 if stream == 'rtmp' else -1,
                 })
 
         for f_id, f_url in traverse_obj(live_info, ('stream_url', 'flv_pull_url', {dict}), default={}).items():
@@ -1681,7 +1682,7 @@ class TikTokLiveIE(TikTokBaseIE):
                 'format_id': f'flv-{f_id}'.lower(),
                 'vcodec': get_vcodec('flv_pull_url_params', f_id),
                 'quality': get_quality(f_id),
-                'preference': -1,
+                'preference': 0,
             })
 
         return formats
