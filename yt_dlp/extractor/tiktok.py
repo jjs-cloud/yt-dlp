@@ -22,7 +22,6 @@ from ..utils import (
     format_field,
     int_or_none,
     join_nonempty,
-    merge_dicts,
     mimetype2ext,
     parse_qs,
     qualities,
@@ -1711,52 +1710,17 @@ class TikTokLiveIE(TikTokBaseIE):
 
         get_quality = qualities(('SD1', 'ld', 'SD2', 'sd', 'HD1', 'hd', 'FULL_HD1', 'uhd', 'ORIGION', 'origin'))
 
-        # Endpoint #1: api-live/user/room
-        statuses = []
         status, live_info = self._call_api('https://www.tiktok.com/api-live/user/room', room_id, {
             'aid': '1988',
             'sourceType': '54',
             'uniqueId': uploader,
         }, 'data', ('user', 'status'))
-        statuses.append(status)
 
         formats = self._extract_formats(live_info, ('liveRoom', 'streamData', 'pull_data', 'stream_data'), get_quality)
         formats += self._extract_formats(live_info, ('liveRoom', 'hevcStreamData', 'pull_data', 'stream_data'), get_quality)
 
-        if not formats:
-            self.report_warning('Could not extract any formats from api-live/user/room, attempting alternate endpoint')
-
-            # Endpoint #2: webcast/room/info
-            status, live_info = self._call_api('https://webcast.tiktok.com/webcast/room/info', room_id, {
-                'aid': '1988',
-                'room_id': room_id,
-            }, 'data', ('status',))
-            statuses.append(status)
-
-            formats = self._extract_formats(live_info, ('stream_url', 'live_core_sdk_data', 'pull_data', 'stream_data'), get_quality)
-
-        # If uploader is a guest on another's livestream, [second] endpoint will not have m3u8 URLs
-        if not traverse_obj(formats, lambda _, v: v['ext'] == 'mp4'):
-            # Endpoint #3: api/live/detail
-            status, live_info_to_merge = self._call_api('https://www.tiktok.com/api/live/detail/', room_id, {
-                'aid': '1988',
-                'roomID': room_id,
-            }, 'LiveRoomInfo', ('status',))
-            statuses.append(status)
-            live_info = merge_dicts(live_info, live_info_to_merge)
-
-            if url_or_none(live_info.get('liveUrl')):
-                formats.append({
-                    'url': live_info['liveUrl'],
-                    'ext': 'mp4',
-                    'protocol': 'm3u8_native',
-                    'format_id': 'hls-fallback',
-                    'vcodec': 'h264',
-                    'quality': get_quality('origin'),
-                })
-
-        # Check statuses. If even one endpoint reports a code of 2, we should assume the user is live.
-        if all(status != 2 for status in statuses):
+        # Status 2 means live
+        if status != 2:
             if not uploader:
                 # If room_id is obtained via mobile share URL and cannot be refreshed, do not wait for live
                 raise ExtractorError('This livestream has ended', expected=True)
